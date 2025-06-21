@@ -22,20 +22,24 @@ st.set_page_config(
 
 # ========== PERFORMANCE MONITORING ==========
 
-def timing_decorator(func):
-    def wrapper(*args, **kwargs):
-        start = time.time()
-        result = func(*args, **kwargs)
-        elapsed = (time.time() - start) * 1000
-        if st.session_state.get('show_performance', False):
-            st.sidebar.text(f"• {func.__name__}: {elapsed:.2f}ms")
-        return result
-    return wrapper
+# def timing_decorator(func):
+#     def wrapper(*args, **kwargs):
+#         start = time.time()
+#         result = func(*args, **kwargs)
+#         elapsed = (time.time() - start) * 1000
+#         if st.session_state.get('show_performance', False):
+#             st.sidebar.text(f"• {func.__name__}: {elapsed:.2f}ms")
+#         return result
+#     return wrapper
 
-@st.cache_data(ttl=60)
-def get_app_performance_stats():
-    return {"cache_hits": st.cache_data.clear.__doc__,
-            "timestamp": datetime.datetime.now()}
+# @st.cache_data(ttl=60)
+# def get_app_performance_stats():
+#     return {"cache_hits": st.cache_data.clear.__doc__,
+#             "timestamp": datetime.datetime.now()}
+
+def timing_decorator(func):
+    """Dummy decorator - performance monitoring disabled"""
+    return func
 
 @st.cache_resource
 def get_cached_db_pool():
@@ -209,8 +213,8 @@ def run():
         st.session_state.admin_logged_in = False
     if 'admin_user' not in st.session_state:
         st.session_state.admin_user = ""
-    if 'show_performance' not in st.session_state:
-        st.session_state.show_performance = False
+    # if 'show_performance' not in st.session_state:
+    #     st.session_state.show_performance = False
     
     img = Image.open('./Logo/CQlogo2.png')
     img = img.resize((1000, 300))
@@ -221,18 +225,18 @@ def run():
     choice = st.sidebar.selectbox("Choose among the given options:", activities)
     
     # Performance monitoring section in sidebar
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🔧 Debug Tools")
-    st.session_state.show_performance = st.sidebar.checkbox(
-        "Show Performance Metrics", 
-        value=st.session_state.show_performance,
-        help="Display execution times for database queries and other operations"
-    )
+    # st.sidebar.markdown("---")
+    # st.sidebar.markdown("### 🔧 Debug Tools")
+    # st.session_state.show_performance = st.sidebar.checkbox(
+    #     "Show Performance Metrics", 
+    #     value=st.session_state.show_performance,
+    #     help="Display execution times for database queries and other operations"
+    # )
     
-    if st.session_state.show_performance:
-        st.sidebar.markdown("**Performance Metrics:**")
-        if 'performance_metrics' not in st.session_state:
-            st.session_state.performance_metrics = {}
+    # if st.session_state.show_performance:
+    #     st.sidebar.markdown("**Performance Metrics:**")
+    #     if 'performance_metrics' not in st.session_state:
+    #         st.session_state.performance_metrics = {}
     
     link = '[Developed by ©Communiqué](https://www.cqiitkgp.com/)'
     st.sidebar.markdown(link, unsafe_allow_html=True)
@@ -343,7 +347,7 @@ def run():
                 if user == "sujay" and pwd == "sujay123":
                     st.session_state.admin_logged_in = True
                     st.session_state.admin_user = user
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.error("Wrong ID & Password")
             return  # Don't render anything else until they're logged in
@@ -354,7 +358,7 @@ def run():
         # Logout button
         if st.button("🚪 Logout"):
             st.session_state.admin_logged_in = False
-            st.experimental_rerun()
+            st.rerun()
 
         # 1) Always re-fetch your tables here
         with get_db_cursor() as (_, cursor):
@@ -447,7 +451,7 @@ def run():
                                           row['status_num'], row['profiles'], row['assigned_to'], int(row['ID'])))
                             
                             st.success("✅ User data saved successfully!")
-                            st.experimental_rerun()
+                            st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error saving user data: {e}")
 
@@ -538,7 +542,7 @@ def run():
                                           row['LinkedIn'], row['Email'], row['Rprofilez'], int(row['ID'])))
                             
                             st.success("✅ Reviewer data saved successfully!")
-                            st.experimental_rerun()
+                            st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error saving reviewer data: {e}")
 
@@ -623,7 +627,7 @@ def run():
                                     )
                             
                             st.success("✅ Reviews data saved (with NULLs where you cleared cells)!")
-                            st.experimental_rerun()
+                            st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error saving reviews data: {e}")
 
@@ -665,7 +669,7 @@ def run():
                         if allocation_result["allocated"] > 0:
                             st.success(f"✅ {allocation_result['message']}")
                             st.info("Details: " + ", ".join(allocation_result["details"]))
-                            st.experimental_rerun()
+                            st.rerun()
                         else:
                             st.info("ℹ️ No CVs available for allocation")
                 
@@ -673,7 +677,7 @@ def run():
                     if st.button("📊 Refresh Stats"):
                         # Clear cache to get fresh data
                         get_allocation_stats.clear()
-                        st.experimental_rerun()
+                        st.rerun()
                 
                 with col3:
                     if st.button("📥 Download Allocation Report"):
@@ -710,7 +714,7 @@ def run():
                                 st.session_state['logged_in'] = True
                                 st.session_state['ad_user'] = row['Name']  # Use the exact name from DB
                                 st.success(f"Welcome {row['Name']}!")
-                                st.experimental_rerun()
+                                st.rerun()
                             else:
                                 st.error("Invalid name or password")
                         except Exception as e:
@@ -722,7 +726,7 @@ def run():
         def display_review_section(ad_user):
             if st.button('Logout'):
                 st.session_state['logged_in'] = False
-                st.experimental_rerun()
+                st.rerun()
 
             st.success(f'Hello {ad_user}!')
 
@@ -805,7 +809,7 @@ def run():
                             st.success("✅ LinkedIn profile cleared!")
                         
                         time.sleep(1)
-                        st.experimental_rerun()
+                        st.rerun()
 
             st.markdown("---")
 
@@ -903,7 +907,7 @@ def run():
                         # Add a small delay to let user see the message before rerun
                         import time
                         time.sleep(1.5)
-                        st.experimental_rerun()
+                        st.rerun()
 
         reviewer_login()
 
