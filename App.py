@@ -1492,59 +1492,76 @@ def run():
                     if filled_sections == 0:
                         st.error("❌ Please fill at least one review section before submitting.")
                     else:
-                        with get_db_cursor() as (_, cur2):
-                            # Get current LinkedIn from reviewer profile
-                            current_info = get_reviewer_info(ad_user)
-                            current_linkedin = current_info["linkedin"] if current_info else linkedin
+                        # Prevent double processing
+                        processing_key = f"processing_{roll}_{ad_user}"
+                        if st.session_state.get(processing_key, False):
+                            st.info("⏳ Review is being processed...")
+                            return
+                        
+                        st.session_state[processing_key] = True
+                        
+                        try:
+                            with get_db_cursor() as (_, cur2):
+                                # Get current LinkedIn from reviewer profile
+                                current_info = get_reviewer_info(ad_user)
+                                current_linkedin = current_info["linkedin"] if current_info else linkedin
+                                
+                                if has_existing_review:
+                                    # Update existing review
+                                    cur2.execute("""
+                                        UPDATE reviews_data SET 
+                                        structure_format=%s, domain_relevance=%s, depth_explanation=%s,
+                                        language_grammar=%s, project_improvements=%s, additional_suggestions=%s,
+                                        reviewer_linkedin=%s
+                                        WHERE roll_no=%s AND reviewer_name=%s
+                                    """, (
+                                        structure_format.strip() or None,
+                                        domain_relevance.strip() or None,
+                                        depth_explanation.strip() or None,
+                                        language_grammar.strip() or None,
+                                        project_improvements.strip() or None,
+                                        additional_suggestions.strip() or None,
+                                        current_linkedin,
+                                        roll, ad_user
+                                    ))
+                                    st.session_state['review_success_msg'] = f"✅ Updated review for {student}!"
+                                else:
+                                    # Insert new review
+                                    cur2.execute("""
+                                        INSERT INTO reviews_data
+                                          (name, roll_no, email_id, reviewer_name, reviewer_linkedin,
+                                           reviewer_email, drive_link, structure_format, domain_relevance,
+                                           depth_explanation, language_grammar, project_improvements, 
+                                           additional_suggestions)
+                                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, (
+                                        student, roll, email_id, ad_user, current_linkedin,
+                                        reviewer_email or None, link,
+                                        structure_format.strip() or None,
+                                        domain_relevance.strip() or None,
+                                        depth_explanation.strip() or None,
+                                        language_grammar.strip() or None,
+                                        project_improvements.strip() or None,
+                                        additional_suggestions.strip() or None
+                                    ))
+                                    cur2.execute(
+                                        "UPDATE user_data SET status_num = 2 WHERE roll_no = %s",
+                                        (roll,)
+                                    )
+                                    st.session_state['review_success_msg'] = f"✅ Submitted review for {student}!"
                             
-                            if has_existing_review:
-                                # Update existing review
-                                cur2.execute("""
-                                    UPDATE reviews_data SET 
-                                    structure_format=%s, domain_relevance=%s, depth_explanation=%s,
-                                    language_grammar=%s, project_improvements=%s, additional_suggestions=%s,
-                                    reviewer_linkedin=%s
-                                    WHERE roll_no=%s AND reviewer_name=%s
-                                """, (
-                                    structure_format.strip() or None,
-                                    domain_relevance.strip() or None,
-                                    depth_explanation.strip() or None,
-                                    language_grammar.strip() or None,
-                                    project_improvements.strip() or None,
-                                    additional_suggestions.strip() or None,
-                                    current_linkedin,
-                                    roll, ad_user
-                                ))
-                                st.session_state['review_success_msg'] = f"✅ Updated review for {student}!"
-                            else:
-                                # Insert new review
-                                cur2.execute("""
-                                    INSERT INTO reviews_data
-                                      (name, roll_no, email_id, reviewer_name, reviewer_linkedin,
-                                       reviewer_email, drive_link, structure_format, domain_relevance,
-                                       depth_explanation, language_grammar, project_improvements, 
-                                       additional_suggestions)
-                                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                                """, (
-                                    student, roll, email_id, ad_user, current_linkedin,
-                                    reviewer_email or None, link,
-                                    structure_format.strip() or None,
-                                    domain_relevance.strip() or None,
-                                    depth_explanation.strip() or None,
-                                    language_grammar.strip() or None,
-                                    project_improvements.strip() or None,
-                                    additional_suggestions.strip() or None
-                                ))
-                                cur2.execute(
-                                    "UPDATE user_data SET status_num = 2 WHERE roll_no = %s",
-                                    (roll,)
-                                )
-                                st.session_state['review_success_msg'] = f"✅ Submitted review for {student}!"
-                        
-                        # Send structured email
-                        send_review_email(email_id, student, review_sections, ad_user)
-                        
-                        # Success message will be shown at the top due to session state
+                            # Send structured email
+                            send_review_email(email_id, student, review_sections, ad_user)
+                            
+                            # Clear processing flag after successful completion
+                            st.session_state[processing_key] = False
+                            st.success(st.session_state['review_success_msg'])
+                            
+                        except Exception as e:
+                            # Clear processing flag on error
+                            st.session_state[processing_key] = False
+                            st.error(f"❌ Error submitting review: {e}")
+                            display_error_details("Review submission failed", e)
 
         reviewer_login()
 
