@@ -1,143 +1,95 @@
-import streamlit as st
-# Set page config must be the first streamlit command
-st.set_page_config(
-   page_title="CQ Resume Portal",
-   page_icon='./Logo/logo2.png',
-)
-
-import pandas as pd
-import base64,random
-import time,datetime
-import io,random
-from streamlit_tags import st_tags
-from PIL import Image
-import pymysql
-# from Courses import ds_course,web_course,android_course,ios_course,uiux_course,resume_videos,interview_videos,software_course,finance_quant_course,consulting_course,core_electrical_electronics_course,product_dev_course
 import os
-from dotenv import load_dotenv
-from contextlib import contextmanager
-from database_pool import db_pool  # This import must be here, before any usage
+import time
+import datetime
+import random
+import base64
+import io
 import traceback
-import pymysql.cursors
+
+import streamlit as st
+import pandas as pd
+from PIL import Image
+from dotenv import load_dotenv
+from contextlib import contextmanager  # for any local context managers
+
+from database_pool import get_db_cursor, db_pool  # ↪ use the Postgres pool!
+
+# Streamlit page config
+st.set_page_config(
+    page_title="CQ Resume Portal",
+    page_icon='./Logo/logo2.png',
+)
 
 # ========== PERFORMANCE MONITORING ==========
 
 def timing_decorator(func):
-    """Decorator to measure function execution time"""
     def wrapper(*args, **kwargs):
-        start_time = time.time()
+        start = time.time()
         result = func(*args, **kwargs)
-        end_time = time.time()
-        execution_time = (end_time - start_time) * 1000  # Convert to milliseconds
-        
-        # Store timing in session state if performance monitoring is enabled
-        if hasattr(st.session_state, 'show_performance') and st.session_state.show_performance:
-            if 'performance_metrics' not in st.session_state:
-                st.session_state.performance_metrics = {}
-            
-            func_name = func.__name__
-            st.session_state.performance_metrics[func_name] = f"{execution_time:.2f}ms"
-            
-            # Display in sidebar
-            st.sidebar.text(f"• {func_name}: {execution_time:.2f}ms")
-        
+        elapsed = (time.time() - start) * 1000
+        if st.session_state.get('show_performance', False):
+            st.sidebar.text(f"• {func.__name__}: {elapsed:.2f}ms")
         return result
     return wrapper
 
 @st.cache_data(ttl=60)
 def get_app_performance_stats():
-    """Get basic performance statistics"""
-    return {
-        "cache_hits": st.cache_data.clear.__doc__,  # Placeholder
-        "timestamp": datetime.datetime.now()
-    }
-
-# ========== CACHING FUNCTIONS ==========
+    return {"cache_hits": st.cache_data.clear.__doc__,
+            "timestamp": datetime.datetime.now()}
 
 @st.cache_resource
 def get_cached_db_pool():
-    """Cache the database connection pool"""
     return db_pool
 
 @timing_decorator
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def load_reviewer_names():
-    """Cache reviewer names for dropdowns"""
     with get_db_cursor() as (_, cur):
-        cur.execute("SELECT DISTINCT Name FROM reviewer_data ORDER BY Name")
-        return [r["Name"] for r in cur.fetchall()]
+        cur.execute("SELECT DISTINCT name FROM reviewer_data ORDER BY name;")
+        return [r["name"] for r in cur.fetchall()]
 
-@st.cache_data(ttl=300)  # Cache for 5 minutes
+@st.cache_data(ttl=300)
 def load_profiles():
-    """Cache profile options"""
     return ['Data', 'Software', 'Consult', 'Finance-Quant', 'Product', 'FMCG']
-
-# @st.cache_data
-# def load_all_courses():
-#     """Cache all course data"""
-#     return {
-#         "Data": ds_course,
-#         "Software": software_course,
-#         "Web": web_course,
-#         "Android": android_course,
-#         "iOS": ios_course,
-#         "UIUX": uiux_course,
-#         "Finance-Quant": finance_quant_course,
-#         "Consult": consulting_course,
-#         "Core": core_electrical_electronics_course,
-#         "Product": product_dev_course
-#     }
 
 @timing_decorator
 @st.cache_data(show_spinner=False)
-def pdf_to_base64(file_path: str):
-    """Cache PDF to base64 conversion"""
+def pdf_to_base64(path: str):
     try:
-        with open(file_path, "rb") as f:
+        with open(path, "rb") as f:
             return base64.b64encode(f.read()).decode('utf-8')
     except FileNotFoundError:
         return None
 
 @timing_decorator
-@st.cache_data(ttl=60)  # Cache for 1 minute
-def get_reviewer_info(reviewer_name: str):
-    """Cache reviewer information"""
+@st.cache_data(ttl=60)
+def get_reviewer_info(name: str):
     with get_db_cursor() as (_, cur):
         cur.execute("""
-            SELECT ReviewsNumber, Rprofilez, LinkedIn, Email
-            FROM reviewer_data
-            WHERE UPPER(Name) = UPPER(%s)
-        """, (reviewer_name,))
+            SELECT reviewsnumber, rprofilez, linkedin, email
+            FROM reviewer_data WHERE UPPER(name)=UPPER(%s);
+        """, (name,))
         return cur.fetchone()
 
 @timing_decorator
-@st.cache_data(ttl=60)  # Cache for 1 minute  
-def get_reviewer_count(reviewer_name: str):
-    """Cache reviewer's completed review count"""
+@st.cache_data(ttl=60)
+def get_reviewer_count(name: str):
     with get_db_cursor() as (_, cur):
-        cur.execute(
-            "SELECT COUNT(*) AS cnt FROM reviews_data WHERE Reviewer_Name = %s",
-            (reviewer_name,)
-        )
+        cur.execute("SELECT COUNT(*) AS cnt FROM reviews_data WHERE reviewer_name=%s;", (name,))
         return cur.fetchone()['cnt']
 
-# ========== HELPER FUNCTIONS ==========
+def get_table_download_link(df, filename, text):
+    csv = df.to_csv(index=False)
+    b64 = base64.b64encode(csv.encode()).decode()
+    return f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
 
-def get_table_download_link(df,filename,text): # creates a downloadable link for data tables as csv
-    
-    csv = df.to_csv(index=False) # converts dataframe to csv formatted string
-    b64 = base64.b64encode(csv.encode()).decode()  # some strings <-> bytes conversions necessary here
-    # href = f'<a href="data:file/csv;base64,{b64}">Download Report</a>'
-    href = f'<a href="data:file/csv;base64,{b64}" download="{filename}">{text}</a>'
-    return href
-
-def show_pdf(file_path):
-    base64_pdf = pdf_to_base64(file_path)
-    if base64_pdf:
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="700" height="1000" type="application/pdf"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
+def show_pdf(path):
+    b64 = pdf_to_base64(path)
+    if b64:
+        st.markdown(f'<iframe src="data:application/pdf;base64,{b64}" width="700" height="1000"></iframe>',
+                    unsafe_allow_html=True)
     else:
-        st.warning("📄 PDF preview not available locally.")
+        st.warning("PDF preview unavailable.")
 
 # def course_recommender(course_list):
 #     st.subheader("**Courses & Certificates Recommendations 🎓**")
@@ -952,19 +904,19 @@ def run():
         reviewer_login()
 
 
-@contextmanager
-def get_db_cursor():
-    conn = db_pool.get_connection()
-    cursor = conn.cursor(pymysql.cursors.DictCursor)
-    try:
-        yield conn, cursor
-        conn.commit()
-    except:
-        conn.rollback()
-        raise
-    finally:
-        cursor.close()
-        conn.close()
+# @contextmanager
+# def get_db_cursor():
+#     conn = db_pool.get_connection()
+#     cursor = conn.cursor(pymysql.cursors.DictCursor)
+#     try:
+#         yield conn, cursor
+#         conn.commit()
+#     except:
+#         conn.rollback()
+#         raise
+#     finally:
+#         cursor.close()
+#         conn.close()
 
 # ========== IMPROVED CV ALLOCATION SYSTEM ==========
 
@@ -1074,11 +1026,7 @@ def get_reviewer_assigned_cvs(reviewer_name: str, max_capacity: int):
 
 if __name__ == "__main__":
     # ✅ Initialize database once at startup
-    init_db()
+    # init_db()
     
     # ✅ Run the main application
     run()
-
-
-
-
