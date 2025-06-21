@@ -96,7 +96,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
                         <div style="display: grid; gap: 15px;">
                             <div style="border-left: 4px solid #3b82f6; padding-left: 15px;">
                                 <h4 style="color: #3b82f6; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
-                                    Name
+                                    👤 Student Name
                                 </h4>
                                 <p style="color: #374151; margin: 0; font-size: 15px;">
                                     {student_name}
@@ -105,7 +105,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
                             
                             <div style="border-left: 4px solid #10b981; padding-left: 15px;">
                                 <h4 style="color: #10b981; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
-                                    Roll Number
+                                    🎓 Roll Number
                                 </h4>
                                 <p style="color: #374151; margin: 0; font-size: 15px;">
                                     {roll_no}
@@ -114,7 +114,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
                             
                             <div style="border-left: 4px solid #f59e0b; padding-left: 15px;">
                                 <h4 style="color: #f59e0b; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
-                                    Target Profile
+                                    🎯 Target Profile
                                 </h4>
                                 <p style="color: #374151; margin: 0; font-size: 15px;">
                                     {profile}
@@ -123,7 +123,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
                             
                             <div style="border-left: 4px solid #8b5cf6; padding-left: 15px;">
                                 <h4 style="color: #8b5cf6; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
-                                    Email Address
+                                    📧 Email Address
                                 </h4>
                                 <p style="color: #374151; margin: 0; font-size: 15px;">
                                     {recipient}
@@ -132,7 +132,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
                             
                             <div style="border-left: 4px solid #ef4444; padding-left: 15px;">
                                 <h4 style="color: #ef4444; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
-                                    CV Drive Link
+                                    📁 CV Drive Link
                                 </h4>
                                 <p style="color: #374151; margin: 0; font-size: 15px;">
                                     <a href="{drive_link}" style="color: #3b82f6; text-decoration: none;">View CV on Drive</a>
@@ -274,7 +274,7 @@ def send_submission_confirmation_email(recipient: str, student_name: str, roll_n
         print(f"Error sending confirmation email: {e}")
         return False
 
-def send_review_email(recipient: str, student_name: str, review_data: dict, reviewer_name: str = None):
+def send_review_email(recipient: str, student_name: str, review_data: dict):
     smtp_host = os.getenv("SMTP_HOST")
     smtp_port = int(os.getenv("SMTP_PORT", 587))
     smtp_user = os.getenv("SMTP_USER")
@@ -321,12 +321,16 @@ def send_review_email(recipient: str, student_name: str, review_data: dict, revi
         content = review_data.get(key, "").strip()
         if content:
             review_sections_html += f"""
-            <div style="background-color: rgba(255, 255, 255, 0.95); border-left: 4px solid {color}; padding: 20px; margin: 15px 0; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);">
-                <h4 style="color: {color}; margin: 0 0 12px 0; font-size: 18px; font-weight: 600;">
-                    {title}
-                </h4>
-                <div style="color: #374151; font-size: 15px; line-height: 1.7; white-space: pre-wrap; font-family: 'Segoe UI', sans-serif;">
-{content}
+            <div style="background-color: rgba(255, 255, 255, 0.95); border-radius: 8px; padding: 20px; margin: 15px 0;">
+                <div style="display: grid; gap: 15px;">
+                    <div style="border-left: 4px solid {color}; padding-left: 15px;">
+                        <h4 style="color: {color}; margin: 0 0 5px 0; font-size: 16px; font-weight: 600;">
+                            {title}
+                        </h4>
+                        <p style="color: #374151; margin: 0; font-size: 15px;">
+                            {content}
+                        </p>
+                    </div>
                 </div>
             </div>
             """
@@ -369,21 +373,9 @@ def send_review_email(recipient: str, student_name: str, review_data: dict, revi
                 <!-- Review Section -->
                 <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 25px; margin: 30px 0; position: relative; overflow: hidden;">
                     <h3 style="color: #ffffff; margin: 0 0 20px 0; font-size: 20px; font-weight: 600; text-align: center;">
-                        📝 Detailed Feedback
+                        📝 Detailed Expert Feedback
                     </h3>
                     {review_sections_html}
-                </div>
-                
-                <!-- Reviewer Attribution -->
-                <div style="background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%); border-radius: 12px; padding: 20px; margin: 25px 0; text-align: center;" id="reviewer-section">
-                    <h4 style="color: #ffffff; margin: 0 0 10px 0; font-size: 18px; font-weight: 600;">
-                        Reviewed by
-                    </h4>
-                    <p style="color: rgba(255, 255, 255, 0.9); margin: 0; font-size: 16px; font-weight: 500;" id="reviewer-name">
-                        {reviewer_name if reviewer_name else "Senior Reviewer"}
-                    </p>
-                    <p style="color: rgba(255, 255, 255, 0.7); margin: 5px 0 0 0; font-size: 14px;">
-                    </p>
                 </div>
                 
                 <p style="font-size: 16px; line-height: 1.6; margin: 25px 0; color: #5a6c7d; text-align: center; font-style: italic;">
@@ -780,7 +772,7 @@ def run():
                                     <h3 style='color: #60A5FA; margin-bottom: 15px; text-align: center;'>✅ Thank you, {name}!</h3>
                                     <div style='color: #FFF; font-size: 16px; text-align: center;'>
                                         <p><strong>Your CV for the {profile} profile has been submitted successfully!</strong></p>
-                                        <p>📧 You'll receive detailed feedback from our experienced reviewers soon.</p>
+                                        <p>📧 You'll receive detailed feedback from our expert reviewers soon.</p>
                                         <p style='color: #60A5FA;'>💡 Check your email for submission confirmation and next steps!</p>
                                     </div>
                                 </div>
@@ -1371,6 +1363,43 @@ def run():
 
             st.info(f"📝 You can review **{remaining}** more CV(s) in **{domain}**.")
 
+            # 🔗 LinkedIn Profile Section (One-time setup)
+            st.markdown("---")
+            st.markdown("### 🔗 Your LinkedIn Profile")
+            
+            with st.form(key="linkedin_form"):
+                current_linkedin = linkedin if linkedin else ""
+                linkedin_input = st.text_input(
+                    "LinkedIn URL (Optional)", 
+                    value=current_linkedin,
+                    placeholder="https://linkedin.com/in/your-profile",
+                    help="Your LinkedIn profile will be shared with reviewees for networking opportunities"
+                )
+                
+                linkedin_submitted = st.form_submit_button("💾 Update LinkedIn Profile")
+                
+                if linkedin_submitted:
+                    final_linkedin = linkedin_input.strip() if linkedin_input.strip() else None
+                    
+                    # Update reviewer's LinkedIn profile
+                    with get_db_cursor() as (_, cur):
+                        cur.execute(
+                            "UPDATE reviewer_data SET linkedin = %s WHERE name = %s",
+                            (final_linkedin, ad_user)
+                        )
+                        # Clear cache to get updated LinkedIn info
+                        get_reviewer_info.clear()
+                        
+                        if final_linkedin:
+                            st.success("✅ LinkedIn profile updated successfully!")
+                        else:
+                            st.success("✅ LinkedIn profile cleared!")
+                        
+                        time.sleep(1)
+                        st.rerun()
+
+            st.markdown("---")
+
             # 🚀 NEW: Use improved CV fetching
             cvs = get_reviewer_assigned_cvs(ad_user, ReviewsNumber)
 
@@ -1419,54 +1448,59 @@ def run():
                 with st.form(key=f"form_{roll}", clear_on_submit=False):
                     st.markdown("### ✍️ Structured Review Sections")
                     
-                    # All 6 sections in a single column layout
-                    structure_format = st.text_area(
-                        "📐 Structure & Format",
-                        value=existing_reviews["structure_format"] or "",
-                        height=120,
-                        placeholder="Comment on CV layout, formatting, whitespace usage, section organization, visual hierarchy, etc.",
-                        help="Evaluate the overall visual presentation and structural organization of the CV"
-                    )
+                    # Create tabs for better organization
+                    tab1, tab2, tab3 = st.tabs(["📐 Format & Structure", "🎯 Content & Domain", "💡 Language & Suggestions"])
                     
-                    domain_relevance = st.text_area(
-                        "🎯 Relevance to Domain",
-                        value=existing_reviews["domain_relevance"] or "",
-                        height=120,
-                        placeholder="Assess how well the CV aligns with the target domain/profile, relevant skills highlighted, etc.",
-                        help="Evaluate how well the CV matches the chosen career domain"
-                    )
+                    with tab1:
+                        structure_format = st.text_area(
+                            "📐 Structure & Format",
+                            value=existing_reviews["structure_format"] or "",
+                            height=120,
+                            placeholder="Comment on CV layout, formatting, whitespace usage, section organization, visual hierarchy, etc.",
+                            help="Evaluate the overall visual presentation and structural organization of the CV"
+                        )
+                        
+                        language_grammar = st.text_area(
+                            "✍️ Language and Grammar",
+                            value=existing_reviews["language_grammar"] or "",
+                            height=120,
+                            placeholder="Point out grammar issues, language clarity, professional tone, word choice, etc.",
+                            help="Assess the quality of written communication and language usage"
+                        )
                     
-                    depth_explanation = st.text_area(
-                        "📊 Depth of Explanation",
-                        value=existing_reviews["depth_explanation"] or "",
-                        height=120,
-                        placeholder="Comment on the detail level of project descriptions, achievements quantification, impact demonstration, etc.",
-                        help="Assess the thoroughness and depth of content descriptions"
-                    )
+                    with tab2:
+                        domain_relevance = st.text_area(
+                            "🎯 Relevance to Domain",
+                            value=existing_reviews["domain_relevance"] or "",
+                            height=120,
+                            placeholder="Assess how well the CV aligns with the target domain/profile, relevant skills highlighted, etc.",
+                            help="Evaluate how well the CV matches the chosen career domain"
+                        )
+                        
+                        depth_explanation = st.text_area(
+                            "📊 Depth of Explanation",
+                            value=existing_reviews["depth_explanation"] or "",
+                            height=120,
+                            placeholder="Comment on the detail level of project descriptions, achievements quantification, impact demonstration, etc.",
+                            help="Assess the thoroughness and depth of content descriptions"
+                        )
+                        
+                        project_improvements = st.text_area(
+                            "🚀 Improvements in Projects",
+                            value=existing_reviews["project_improvements"] or "",
+                            height=120,
+                            placeholder="Suggest specific improvements for project descriptions, technical details, outcomes, etc.",
+                            help="Provide specific suggestions for enhancing project presentations"
+                        )
                     
-                    language_grammar = st.text_area(
-                        "✍️ Language and Grammar",
-                        value=existing_reviews["language_grammar"] or "",
-                        height=120,
-                        placeholder="Point out grammar issues, language clarity, professional tone, word choice, etc.",
-                        help="Assess the quality of written communication and language usage"
-                    )
-                    
-                    project_improvements = st.text_area(
-                        "🚀 Improvements in Projects",
-                        value=existing_reviews["project_improvements"] or "",
-                        height=120,
-                        placeholder="Suggest specific improvements for project descriptions, technical details, outcomes, etc.",
-                        help="Provide specific suggestions for enhancing project presentations"
-                    )
-                    
-                    additional_suggestions = st.text_area(
-                        "💡 Additional Suggestions",
-                        value=existing_reviews["additional_suggestions"] or "",
-                        height=140,
-                        placeholder="Any other recommendations, missing sections, skills to add, certifications to pursue, etc.",
-                        help="Provide any other valuable advice or recommendations"
-                    )
+                    with tab3:
+                        additional_suggestions = st.text_area(
+                            "💡 Additional Suggestions",
+                            value=existing_reviews["additional_suggestions"] or "",
+                            height=140,
+                            placeholder="Any other recommendations, missing sections, skills to add, certifications to pursue, etc.",
+                            help="Provide any other valuable advice or recommendations"
+                        )
                     
                     # Validation helper
                     review_sections = {
@@ -1542,7 +1576,7 @@ def run():
                                 st.session_state['review_success_msg'] = f"✅ Submitted review for {student}!"
                         
                         # Send structured email
-                        send_review_email(email_id, student, review_sections, ad_user)
+                        send_review_email(email_id, student, review_sections)
                         
                         time.sleep(1.5)
                         st.rerun()
