@@ -261,13 +261,17 @@ def run():
             
             pdf_file = st.file_uploader("Upload your Resume (PDF format)", type=["pdf"])
             if pdf_file is not None and roll_no:
-                # Always save as <roll_no>.pdf so display_code can find it
-                save_path = f'./Uploaded_Resumes/{roll_no}.pdf'
-                with st.spinner('Processing your Resume...'):
-                    os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                    with open(save_path, "wb") as f:
-                        f.write(pdf_file.getbuffer())
-                show_pdf(save_path)
+                # Enforce 2 MB max
+                if pdf_file.size > 2 * 1024 * 1024:
+                    st.error("🚨 File too large—please upload a PDF under 2 MB.")
+                else:
+                    # Always save as <roll_no>.pdf so display_code can find it
+                    save_path = f'./Uploaded_Resumes/{roll_no}.pdf'
+                    with st.spinner('Processing your Resume...'):
+                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                        with open(save_path, "wb") as f:
+                            f.write(pdf_file.getbuffer())
+                    show_pdf(save_path)
 
             # Move profile selection here, after file upload and preview
             profile = st.selectbox("Select your target profile:", load_profiles(), 
