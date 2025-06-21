@@ -5,7 +5,7 @@ import random
 import base64
 import io
 import traceback
-
+import time
 import streamlit as st
 import pandas as pd
 from PIL import Image
@@ -14,10 +14,200 @@ from contextlib import contextmanager  # for any local context managers
 
 from database_pool import get_db_cursor, db_pool  # ↪ use the Postgres pool!
 
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
+
+def send_review_email(recipient: str, student_name: str, review_text: str):
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", 587))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_pass = os.getenv("SMTP_PASS")
+    email_from = os.getenv("EMAIL_FROM")
+
+    # Build message
+    msg = MIMEMultipart("related")
+    msg["Subject"] = f"Your CV Review is Ready {student_name}"
+    msg["From"]    = email_from
+    msg["To"]      = recipient
+
+    # Create alternative container for HTML and text
+    msg_alternative = MIMEMultipart("alternative")
+    msg.attach(msg_alternative)
+
+    # Embed logo image
+    try:
+        with open("Logo/CQlogo2.png", "rb") as f:
+            img_data = f.read()
+        
+        image = MIMEImage(img_data)
+        image.add_header("Content-ID", "<cq_logo>")
+        image.add_header("Content-Disposition", "inline", filename="CQlogo2.png")
+        msg.attach(image)
+        
+        logo_src = "cid:cq_logo"
+    except:
+        # Fallback if logo file not found
+        logo_src = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjYwIiB2aWV3Qm94PSIwIDAgMjAwIDYwIiBmaWxsPSJub25lIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxyZWN0IHdpZHRoPSIyMDAiIGhlaWdodD0iNjAiIGZpbGw9IiM0ZmFjZmUiLz48dGV4dCB4PSIxMDAiIHk9IjM1IiBmaWxsPSJ3aGl0ZSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE4IiBmb250LXdlaWdodD0iYm9sZCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+Q29tbXVuaXF1w6k8L3RleHQ+PC9zdmc+"
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>CV Review Ready</title>
+    </head>
+    <body style="margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh;">
+        <div style="max-width: 600px; margin: 20px auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);">
+            
+            <!-- Header with Logo -->
+            <div style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); padding: 30px 20px; text-align: center; position: relative;">
+                <div style="background-color: rgba(255, 255, 255, 0.1); padding: 15px; border-radius: 10px; display: inline-block; margin-bottom: 15px;">
+                    <img src="{logo_src}" alt="Communiqué Logo" style="max-width: 200px; height: auto; border-radius: 8px; background-color: #ffffff; padding: 10px;">
+                </div>
+                <h1 style="color: #ffffff; margin: 0; font-size: 28px; font-weight: 600; text-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+                    🎯 CV Review Complete!
+                </h1>
+                <p style="color: rgba(255, 255, 255, 0.9); margin: 10px 0 0 0; font-size: 16px;">
+                    Your personalized feedback is ready
+                </p>
+            </div>
+            
+            <!-- Main Content -->
+            <div style="padding: 40px 30px;">
+                <div style="text-align: center; margin-bottom: 30px;">
+                    <h2 style="color: #2c3e50; margin: 0 0 10px 0; font-size: 24px; font-weight: 600;">
+                        Hi {student_name}! 👋
+                    </h2>
+                    <p style="color: #5a6c7d; font-size: 16px; line-height: 1.6; margin: 0;">
+                        Great news! Your CV has been thoroughly reviewed by one of our experienced seniors.
+                    </p>
+                </div>
+                
+                <!-- Review Section -->
+                <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 12px; padding: 25px; margin: 30px 0; position: relative; overflow: hidden;">
+                    <h3 style="color: #ffffff; margin: 0 0 15px 0; font-size: 20px; font-weight: 600; display: flex; align-items: center;">
+                        📝 Expert Feedback
+                    </h3>
+                    <div style="background-color: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 8px; color: #2c3e50; font-size: 15px; line-height: 1.7; white-space: pre-wrap; font-family: 'Segoe UI', sans-serif; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);">
+{review_text}
+                    </div>
+                </div>
+                
+                <p style="font-size: 16px; line-height: 1.6; margin: 25px 0; color: #5a6c7d; text-align: center; font-style: italic;">
+                    💡 We recommend implementing the feedback provided to strengthen your CV for future applications.
+                </p>
+                
+                <!-- PrepNest Section -->
+                <div style="background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%); border-radius: 12px; padding: 25px; margin: 30px 0; position: relative; overflow: hidden;">
+                    <h2 style="font-size: 22px; color: #8b4513; margin: 0 0 15px 0; font-weight: 600;">
+                        🚀 About PrepNest Platform
+                    </h2>
+                    
+                    <p style="font-size: 16px; line-height: 1.6; margin: 0 0 20px 0; color: #6b4423;">
+                        While you wait for your next opportunity, we recommend exploring <strong>PrepNest.in</strong> - a comprehensive platform built specifically for internships and placements. PrepNest is designed to empower students and professionals in their career journey with cutting-edge AI technology and expert guidance.
+                    </p>
+                    
+                    <h3 style="font-size: 18px; color: #8b4513; margin: 20px 0 15px 0; font-weight: 600;">
+                        PrepNest offers four key features:
+                    </h3>
+                    
+                    <div style="margin: 20px 0;">
+                        <div style="background-color: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #10b981;">
+                            <h4 style="font-size: 16px; color: #10b981; margin: 0 0 8px 0; font-weight: 600;">
+                                🤖 1. AI Resume Review
+                            </h4>
+                            <p style="font-size: 14px; line-height: 1.6; margin: 0; color: #374151;">
+                                Get instant, comprehensive feedback on your resume with AI-powered analysis. Receive detailed insights on content, formatting, ATS compatibility, and industry-specific recommendations.
+                            </p>
+                        </div>
+                        
+                        <div style="background-color: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #3b82f6;">
+                            <h4 style="font-size: 16px; color: #3b82f6; margin: 0 0 8px 0; font-weight: 600;">
+                                🎤 2. AI Interviews
+                            </h4>
+                            <p style="font-size: 14px; line-height: 1.6; margin: 0; color: #374151;">
+                                Practice with AI-powered mock interviews tailored to your target role. Get real-time feedback on your responses, communication skills, and interview performance.
+                            </p>
+                        </div>
+                        
+                        <div style="background-color: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #f59e0b;">
+                            <h4 style="font-size: 16px; color: #f59e0b; margin: 0 0 8px 0; font-weight: 600;">
+                                📚 3. Resource Hub
+                            </h4>
+                            <p style="font-size: 14px; line-height: 1.6; margin: 0; color: #374151;">
+                                Access a comprehensive library of career resources including interview guides, resume templates, industry insights, and preparation materials for various domains.
+                            </p>
+                        </div>
+                        
+                        <div style="background-color: rgba(255, 255, 255, 0.7); padding: 15px; border-radius: 8px; margin: 12px 0; border-left: 4px solid #ef4444;">
+                            <h4 style="font-size: 16px; color: #ef4444; margin: 0 0 8px 0; font-weight: 600;">
+                                👥 4. Mentorship & Jobs Portal
+                            </h4>
+                            <p style="font-size: 14px; line-height: 1.6; margin: 0; color: #374151;">
+                                Connect with industry mentors for personalized career guidance and explore curated job opportunities from top companies across various sectors.
+                            </p>
+                        </div>
+                    </div>
+                    
+                    <div style="text-align: center; margin: 25px 0 0 0;">
+                        <a href="https://prepnest.in/?refercode=PrepGrow-sahib-singhprepgrowthpartner-02" 
+                           style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #ffffff; padding: 15px 30px; 
+                                  text-decoration: none; border-radius: 25px; font-size: 16px; font-weight: 600;
+                                  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4); transition: all 0.3s ease;
+                                  border: 2px solid transparent;">
+                            🌟 Explore PrepNest Platform
+                        </a>
+                    </div>
+                </div>
+                
+                <!-- Closing -->
+                <div style="text-align: center; padding: 25px 0; border-top: 2px solid #e5e7eb; margin-top: 30px;">
+                    <p style="font-size: 16px; line-height: 1.6; margin: 0 0 15px 0; color: #5a6c7d;">
+                        Thank you for using <span style="color: #667eea; font-weight: 600;">Communiqué's CDC Companion</span>. We wish you the best of luck in your career journey!
+                    </p>
+                    
+                    <p style="font-size: 16px; line-height: 1.6; margin: 0; color: #2c3e50;">
+                        Best regards,<br>
+                        <strong style="color: #667eea;">Communiqué</strong>
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Floating elements for visual appeal -->
+        <div style="position: fixed; top: 10%; left: 5%; width: 20px; height: 20px; background: rgba(255, 255, 255, 0.3); border-radius: 50%; animation: float 3s ease-in-out infinite;"></div>
+        <div style="position: fixed; top: 60%; right: 10%; width: 15px; height: 15px; background: rgba(255, 255, 255, 0.2); border-radius: 50%; animation: float 4s ease-in-out infinite reverse;"></div>
+        
+        <style>
+            @keyframes float {{
+                0%, 100% {{ transform: translateY(0px); }}
+                50% {{ transform: translateY(-10px); }}
+            }}
+            @media only screen and (max-width: 600px) {{
+                .container {{ width: 95% !important; margin: 10px auto !important; }}
+                .content {{ padding: 20px !important; }}
+            }}
+        </style>
+    </body>
+    </html>
+    """
+    part = MIMEText(html, "html")
+    msg_alternative.attach(part)
+
+    # Send
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(email_from, [recipient], msg.as_string())
+
+
 # Streamlit page config
 st.set_page_config(
-    page_title="CQ Resume Portal",
-    page_icon='./Logo/logo2.png',
+    page_title="Communiqué | CDC Companion",
+    page_icon='./Logo/favicon.ico',
 )
 
 # ========== PERFORMANCE MONITORING ==========
@@ -54,7 +244,7 @@ def load_reviewer_names():
 
 @st.cache_data(ttl=300)
 def load_profiles():
-    return ['Data', 'Software', 'Consult', 'Finance-Quant', 'Product', 'FMCG']
+    return ['Data', 'Software', 'Consult', 'Finance/Quant', 'Product', 'FMCG', 'Core']
 
 @timing_decorator
 @st.cache_data(show_spinner=False)
@@ -116,7 +306,7 @@ load_dotenv()
 def insert_data_simple(name, roll_no, email, drive_link, profile):
     """Optimized user data insertion"""
     insert_sql = """
-        INSERT INTO user_data (Name, Roll_No, Email_ID, drive_link, status_num, profiles)
+        INSERT INTO user_data (name, roll_no, email_id, drive_link, status_num, profiles)
         VALUES (%s, %s, %s, %s, %s, %s)
     """
     with get_db_cursor() as (_, cursor):  # ✅ Uses context manager
@@ -126,7 +316,7 @@ def insert_data_simple(name, roll_no, email, drive_link, profile):
 def insert_data_reviewers(name, pwd, reviewsnum, cvsreviewed, linkedin, email, rprofilez=None):
     """Optimized reviewer insertion - now uses Name instead of UserName"""
     insert_sql = """
-        INSERT INTO reviewer_data (Name, Password, ReviewsNumber, Cvsreviewed, LinkedIn, Email, Rprofilez)
+        INSERT INTO reviewer_data (name, password, reviewsnumber, cvsreviewed, linkedin, email, rprofilez)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
     """
     with get_db_cursor() as (_, cursor):
@@ -219,7 +409,7 @@ def run():
     img = Image.open('./Logo/CQlogo2.png')
     img = img.resize((1000, 300))
     st.image(img)
-    st.title("Communiqué - CV Portal")
+    st.title("Communiqué | CDC Companion")
     st.sidebar.markdown("# Choose User")
     activities = ["User", "Reviewer" ,"Admin"]
     choice = st.sidebar.selectbox("Choose among the given options:", activities)
@@ -254,89 +444,213 @@ def run():
             roll_no = st.text_input("Enter your Roll Number:", placeholder="22XX9999")
         
         if name and roll_no:
-            st.markdown('''
-                <h3 style='text-align: left; color: #FF4B4B; margin-top: 20px; margin-bottom: 20px;'>
-                    📄 Drop your Resume here to get it reviewed by seniors
-                </h3>
-                <p style='text-align: left; color: #FFF; font-size: 16px;'>
-                    Get personalized feedback from seniors in your chosen field
-                </p>
-                ''', unsafe_allow_html=True)
+            # --- START VALIDATIONS ---
+            # 1. Roll number format validation
+            is_valid_roll_format = False
+            if len(roll_no) > 4:
+                if (roll_no.startswith("22") and roll_no[4] == '3') or \
+                   (roll_no.startswith("23") and roll_no[4] == '1'):
+                    is_valid_roll_format = True
+
+            # 2. Check for existing submission in database
+            is_duplicate = False
+            with get_db_cursor() as (_, cursor):
+                cursor.execute("SELECT id FROM user_data WHERE roll_no = %s", (roll_no,))
+                if cursor.fetchone():
+                    is_duplicate = True
             
-            pdf_file = st.file_uploader("Upload your Resume (PDF format)", type=["pdf"])
-            if pdf_file is not None and roll_no:
-                # Enforce 2 MB max
-                if pdf_file.size > 2 * 1024 * 1024:
-                    st.error("🚨 File too large—please upload a PDF under 2 MB.")
-                else:
-                    # Always save as <roll_no>.pdf so display_code can find it
-                    save_path = f'./Uploaded_Resumes/{roll_no}.pdf'
-                    with st.spinner('Processing your Resume...'):
-                        os.makedirs(os.path.dirname(save_path), exist_ok=True)
-                        with open(save_path, "wb") as f:
-                            f.write(pdf_file.getbuffer())
-                    show_pdf(save_path)
-
-            # Move profile selection here, after file upload and preview
-            profile = st.selectbox("Select your target profile:", load_profiles(), 
-                                 help="Choose the profile you're interested in for your career")
-            
-            st.markdown(
-                """
-                <div style='background-color: #1E1E1E; padding: 20px; border-radius: 10px; margin: 20px 0;'>
-                    <h2 style='color: #FF4B4B;'>Almost there! 🎯</h2>
-                    <p style='color: #FFF; font-size: 16px;'>Please provide your contact details below to receive your review.</p>
-                    <p style='color: #888; font-size: 14px;'>Note: You can submit only one CV for review</p>
-                </div>
-                """, 
-                unsafe_allow_html=True
-            )
-
-            # ✅ FIXED: Always show inputs, check duplicates only on Submit
-            st.write("( Make sure you have provided access to your CV in the drive link )")
-            email_input = st.text_input("Enter your KGP EmailID here: ")
-            drive_link = st.text_input("Enter your Drive Link: ")
-            
-            if st.button("Submit for Review", type="primary"):
-                try:
-                    # 1️⃣ Check duplicates only now
-                    with get_db_cursor() as (_, cursor):
-                        cursor.execute(
-                            "SELECT status_num FROM user_data WHERE Roll_No = %s",
-                            (roll_no,)
-                        )
-                        status_row = cursor.fetchone()
-
-                    if status_row and status_row['status_num'] == 1:
-                        st.warning(f"⚠️ You have already submitted a CV for review.")
-                        st.info("💡 Each student may only submit once.")
-
-                    # 2️⃣ Not a duplicate → proceed
-                    elif email_input and drive_link:
-                        insert_data_simple(name, roll_no, email_input, drive_link, profile)
-                        
-                        # ✅ Persistent success message
-                        st.success("🎉 **CV Submission Successful!**")
-                        st.markdown(
-                            f"""
-                            <div style='background-color: #1E3A8A; padding: 20px; border-radius: 10px; margin: 20px 0;'>
-                                <h3 style='color: #60A5FA; margin-bottom: 15px; text-align: center;'>✅ Thank you, {name}!</h3>
-                                <div style='color: #FFF; font-size: 16px; text-align: center;'>
-                                    <p><strong>Your CV for the {profile} profile has been submitted successfully!</strong></p>
-                                    <p>📧 You'll receive detailed feedback from our expert reviewers soon.</p>
-                                    <p style='color: #60A5FA;'>💡 You will receive an email soon with your review!</p>
-                                </div>
-                            </div>
-                            """, 
-                            unsafe_allow_html=True
-                        )
-                        st.balloons()
-                        
+            # --- RENDER UI BASED ON VALIDATION ---
+            if not is_valid_roll_format:
+                st.error("You are not permitted to use this portal. Please ensure your roll number is correct (e.g., starts with '22...3...' or '23...1...').")
+            elif is_duplicate:
+                st.warning("⚠️ You have already submitted a CV for review.")
+                st.info("Each student may only submit once. If you believe this is an error, please contact the administrators.")
+            else:
+                # --- VALIDATED: SHOW THE REST OF THE FORM ---
+                st.markdown('''
+                    <h3 style='text-align: left; color: #FF4B4B; margin-top: 20px; margin-bottom: 20px;'>
+                        📄 Drop your Resume here to get it reviewed by seniors
+                    </h3>
+                    <p style='text-align: left; color: #FFF; font-size: 16px;'>
+                        Get personalized feedback from seniors in your chosen field
+                    </p>
+                    ''', unsafe_allow_html=True)
+                
+                pdf_file = st.file_uploader("Upload your Resume (PDF format)", type=["pdf"])
+                if pdf_file is not None and roll_no:
+                    # Enforce 2 MB max
+                    if pdf_file.size > 2 * 1024 * 1024:
+                        st.error("🚨 File too large—please upload a PDF under 2 MB.")
                     else:
-                        st.error("Please provide both email and drive link.")
+                        # Always save as <roll_no>.pdf so display_code can find it
+                        save_path = f'./Uploaded_Resumes/{roll_no}.pdf'
+                        with st.spinner('Processing your Resume...'):
+                            os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                            with open(save_path, "wb") as f:
+                                f.write(pdf_file.getbuffer())
+                        show_pdf(save_path)
 
-                except Exception as e:
-                    display_error_details("CV submission failed", e)
+                # Move profile selection here, after file upload and preview
+                profile = st.selectbox("Select your target profile:", load_profiles(), 
+                                     help="Choose the profile you're interested in for your career")
+                
+                st.markdown(
+                    """
+                    <div style='background-color: #1E1E1E; padding: 20px; border-radius: 10px; margin: 20px 0;'>
+                        <h2 style='color: #FF4B4B;'>Almost there! 🎯</h2>
+                        <p style='color: #FFF; font-size: 16px;'>Please provide your contact details below to receive your review.</p>
+                        <p style='color: #888; font-size: 14px;'>Note: You can submit only one CV for review</p>
+                    </div>
+                    """, 
+                    unsafe_allow_html=True
+                )
+
+                # ✅ FIXED: Always show inputs, check duplicates only on Submit
+                st.write("( Make sure you have provided access to your CV in the drive link )")
+                email_input = st.text_input("Enter your KGP EmailID here: ", placeholder="yourname@kgpian.iitkgp.ac.in")
+                
+                # Email validation
+                is_valid_email = False
+                if email_input:
+                    if email_input.endswith("@kgpian.iitkgp.ac.in"):
+                        is_valid_email = True
+                        st.success("✅ Valid KGP email format")
+                    else:
+                        st.error("❌ Please use your KGP email ending with @kgpian.iitkgp.ac.in")
+                
+                drive_link = st.text_input("Enter your Drive Link: ")
+                
+                if st.button("Submit for Review", type="primary"):
+                    try:
+                        # 1️⃣ Validate email format first
+                        if not email_input:
+                            st.error("Please enter your KGP email address.")
+                        elif not email_input.endswith("@kgpian.iitkgp.ac.in"):
+                            st.error("❌ Please use your official KGP email ending with @kgpian.iitkgp.ac.in")
+                        elif not drive_link:
+                            st.error("Please provide your drive link.")
+                        else:
+                            # All validations passed - proceed with submission
+                            insert_data_simple(name, roll_no, email_input, drive_link, profile)
+                            
+                            # ✅ Persistent success message
+                            st.success("🎉 **CV Submission Successful!**")
+                            st.markdown(
+                                f"""
+                                <div style='background-color: #1E3A8A; padding: 20px; border-radius: 10px; margin: 20px 0;'>
+                                    <h3 style='color: #60A5FA; margin-bottom: 15px; text-align: center;'>✅ Thank you, {name}!</h3>
+                                    <div style='color: #FFF; font-size: 16px; text-align: center;'>
+                                        <p><strong>Your CV for the {profile} profile has been submitted successfully!</strong></p>
+                                        <p>📧 You'll receive detailed feedback from our expert reviewers soon.</p>
+                                        <p style='color: #60A5FA;'>💡 You will receive an email soon with your review!</p>
+                                    </div>
+                                </div>
+                                """, 
+                                unsafe_allow_html=True
+                            )
+                            
+                            # AI CV Review Link
+                            st.markdown(
+                                """
+                                <div style='background-color: #2D1B69; padding: 15px; border-radius: 8px; margin: 15px 0; border-left: 4px solid #8B5CF6;'>
+                                    <p style='color: #FFF; font-size: 16px; margin: 0;'>
+                                        🤖 While you wait for your CV to get reviewed by a senior, get your CV reviewed by AI via the following link: 
+                                        <a href='https://prepnest.in/?refercode=PrepGrow-sahib-singhprepgrowthpartner-02' target='_blank' style='color: #A78BFA; text-decoration: underline;'>PrepNest AI CV Review</a>
+                                    </p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            # PrepNest Platform Details
+                            st.markdown(
+                                """
+                                <div style='background-color: #1F2937; padding: 20px; border-radius: 10px; margin: 20px 0; border: 1px solid #374151;'>
+                                    <h3 style='color: #F3F4F6; margin-bottom: 15px; text-align: center;'>🚀 About PrepNest Platform</h3>
+                                    <p style='color: #D1D5DB; font-size: 16px; text-align: center; margin-bottom: 20px;'>
+                                        <strong>PrepNest.in</strong> is a comprehensive platform built specifically for internships and placements. 
+                                        PrepNest is designed to empower students and professionals in their career journey with cutting-edge AI technology and expert guidance.
+                                    </p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Feature cards using separate markdown blocks
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.markdown(
+                                    """
+                                    <div style='background-color: #111827; padding: 15px; border-radius: 8px; border-left: 4px solid #10B981; margin-bottom: 15px;'>
+                                        <h4 style='color: #10B981; margin: 0 0 8px 0; font-size: 18px;'>🤖 AI Resume Review</h4>
+                                        <p style='color: #D1D5DB; font-size: 14px; margin: 0;'>
+                                            Get instant, comprehensive feedback on your resume with AI-powered analysis. 
+                                            Receive detailed insights on content, formatting, ATS compatibility, and industry-specific recommendations.
+                                        </p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                                
+                                st.markdown(
+                                    """
+                                    <div style='background-color: #111827; padding: 15px; border-radius: 8px; border-left: 4px solid #F59E0B;'>
+                                        <h4 style='color: #F59E0B; margin: 0 0 8px 0; font-size: 18px;'>📚 Resource Hub</h4>
+                                        <p style='color: #D1D5DB; font-size: 14px; margin: 0;'>
+                                            Access a comprehensive library of career resources including interview guides, 
+                                            resume templates, industry insights, and preparation materials for various domains.
+                                        </p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                            
+                            with col2:
+                                st.markdown(
+                                    """
+                                    <div style='background-color: #111827; padding: 15px; border-radius: 8px; border-left: 4px solid #3B82F6; margin-bottom: 15px;'>
+                                        <h4 style='color: #3B82F6; margin: 0 0 8px 0; font-size: 18px;'>🎤 AI Interviews</h4>
+                                        <p style='color: #D1D5DB; font-size: 14px; margin: 0;'>
+                                            Practice with AI-powered mock interviews tailored to your target role. 
+                                            Get real-time feedback on your responses, communication skills, and interview performance.
+                                        </p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                                
+                                st.markdown(
+                                    """
+                                    <div style='background-color: #111827; padding: 15px; border-radius: 8px; border-left: 4px solid #EF4444;'>
+                                        <h4 style='color: #EF4444; margin: 0 0 8px 0; font-size: 18px;'>👥 Mentorship & Jobs Portal</h4>
+                                        <p style='color: #D1D5DB; font-size: 14px; margin: 0;'>
+                                            Connect with industry mentors for personalized career guidance and explore 
+                                            curated job opportunities from top companies across various sectors.
+                                        </p>
+                                    </div>
+                                    """,
+                                    unsafe_allow_html=True
+                                )
+                            
+                            # Call-to-action button
+                            st.markdown(
+                                """
+                                <div style='text-align: center; margin: 20px 0;'>
+                                    <a href='https://prepnest.in/?refercode=PrepGrow-sahib-singhprepgrowthpartner-02' target='_blank' 
+                                       style='background-color: #8B5CF6; color: white; padding: 12px 24px; text-decoration: none; 
+                                              border-radius: 6px; font-weight: bold; display: inline-block;'>
+                                        🌟 Explore PrepNest Platform
+                                    </a>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            st.balloons()
+
+                    except Exception as e:
+                        display_error_details("CV submission failed", e)
     elif choice == 'Admin':
         # First check session state
         if not st.session_state.admin_logged_in:
@@ -367,10 +681,10 @@ def run():
                 st.header("**User's Data (Editable)**")
                 cursor.execute("""
                     SELECT
-                        ID,
-                        Name,
-                        Roll_No,
-                        Email_ID,
+                        id,
+                        name,
+                        roll_no,
+                        email_id,
                         drive_link,
                         status_num,
                         profiles,
@@ -379,7 +693,7 @@ def run():
                 """)
                 user_data = cursor.fetchall()
                 user_df = pd.DataFrame(user_data, columns=[
-                    'ID', 'Name', 'Roll_No', 'Email_ID', 'drive_link', 
+                    'id', 'name', 'roll_no', 'email_id', 'drive_link', 
                     'status_num', 'profiles', 'assigned_to'
                 ])
 
@@ -388,7 +702,7 @@ def run():
                 
                 # Configure column types for better editing experience
                 column_config = {
-                    "ID": st.column_config.NumberColumn("ID", disabled=True),
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
                     "status_num": st.column_config.SelectboxColumn(
                         "Status",
                         options=[0, 1, 2],
@@ -420,35 +734,35 @@ def run():
                     if st.button("💾 Save User Data Changes", type="primary"):
                         try:
                             # 🔧 FIX: Normalize ID columns to handle int/float mismatch
-                            original_ids = set(user_df['ID'].tolist())
+                            original_ids = set(user_df['id'].tolist())
                             edited_ids = {
-                                int(x) for x in edited_user_df['ID'].tolist()
+                                int(x) for x in edited_user_df['id'].tolist()
                                 if not pd.isna(x)
                             }
                             deleted_ids = original_ids - edited_ids
                             
                             # Delete removed rows
                             for deleted_id in deleted_ids:
-                                cursor.execute("DELETE FROM user_data WHERE ID = %s", (deleted_id,))
+                                cursor.execute("DELETE FROM user_data WHERE id = %s", (deleted_id,))
                             
                             # Update/Insert rows
                             for _, row in edited_user_df.iterrows():
-                                if pd.isna(row['ID']):
+                                if pd.isna(row['id']):
                                     # New row - INSERT
                                     cursor.execute("""
-                                        INSERT INTO user_data (Name, Roll_No, Email_ID, drive_link, status_num, profiles, assigned_to)
+                                        INSERT INTO user_data (name, roll_no, email_id, drive_link, status_num, profiles, assigned_to)
                                         VALUES (%s, %s, %s, %s, %s, %s, %s)
-                                    """, (row['Name'], row['Roll_No'], row['Email_ID'], row['drive_link'], 
+                                    """, (row['name'], row['roll_no'], row['email_id'], row['drive_link'], 
                                           row['status_num'], row['profiles'], row['assigned_to']))
                                 else:
                                     # Existing row - UPDATE
                                     cursor.execute("""
                                         UPDATE user_data 
-                                        SET Name=%s, Roll_No=%s, Email_ID=%s, drive_link=%s, 
+                                        SET name=%s, roll_no=%s, email_id=%s, drive_link=%s, 
                                             status_num=%s, profiles=%s, assigned_to=%s
-                                        WHERE ID=%s
-                                    """, (row['Name'], row['Roll_No'], row['Email_ID'], row['drive_link'],
-                                          row['status_num'], row['profiles'], row['assigned_to'], int(row['ID'])))
+                                        WHERE id=%s
+                                    """, (row['name'], row['roll_no'], row['email_id'], row['drive_link'],
+                                          row['status_num'], row['profiles'], row['assigned_to'], int(row['id'])))
                             
                             st.success("✅ User data saved successfully!")
                             st.rerun()
@@ -464,38 +778,38 @@ def run():
                 st.header("**Reviewer's Data (Editable)**")
                 cursor.execute("""
                     SELECT
-                        rd.ID,
-                        rd.Name,
-                        rd.Password,
-                        rd.ReviewsNumber,
-                        COALESCE(rv.cnt, 0) AS Cvsreviewed,
-                        rd.LinkedIn,
-                        rd.Email,
-                        rd.Rprofilez
+                        rd.id,
+                        rd.name,
+                        rd.password,
+                        rd.reviewsnumber,
+                        COALESCE(rv.cnt, 0) AS cvsreviewed,
+                        rd.linkedin,
+                        rd.email,
+                        rd.rprofilez
                     FROM reviewer_data rd
                     LEFT JOIN (
-                        SELECT Reviewer_Name, COUNT(*) AS cnt
+                        SELECT reviewer_name, COUNT(*) AS cnt
                         FROM reviews_data
-                        GROUP BY Reviewer_Name
+                        GROUP BY reviewer_name
                     ) rv
-                    ON rv.Reviewer_Name = rd.Name
+                    ON rv.reviewer_name = rd.name
                 """)
                 reviewer_data = cursor.fetchall()
                 reviewer_df = pd.DataFrame(reviewer_data, columns=[
-                    'ID', 'Name', 'Password', 'ReviewsNumber', 'Cvsreviewed', 'LinkedIn', 'Email', 'Rprofilez'
+                    'id', 'name', 'password', 'reviewsnumber', 'cvsreviewed', 'linkedin', 'email', 'rprofilez'
                 ])
 
                 reviewer_column_config = {
-                    "ID": st.column_config.NumberColumn("ID", disabled=True),
-                    "ReviewsNumber": st.column_config.NumberColumn("Review Quota", min_value=0, max_value=100),
-                    "Cvsreviewed": st.column_config.NumberColumn("CVs Reviewed", min_value=0, disabled=True),
-                    "Rprofilez": st.column_config.SelectboxColumn(
+                    "id": st.column_config.NumberColumn("ID", disabled=True),
+                    "reviewsnumber": st.column_config.NumberColumn("Review Quota", min_value=0, max_value=100),
+                    "cvsreviewed": st.column_config.NumberColumn("CVs Reviewed", min_value=0, disabled=True),
+                    "rprofilez": st.column_config.SelectboxColumn(
                         "Domain",
                         options=load_profiles()
                     ),
-                    "LinkedIn": st.column_config.LinkColumn("LinkedIn Profile"),
-                    "Email": st.column_config.TextColumn("Email"),
-                    "Password": st.column_config.TextColumn("Password", help="Reviewer login password")
+                    "linkedin": st.column_config.LinkColumn("LinkedIn Profile"),
+                    "email": st.column_config.TextColumn("Email"),
+                    "password": st.column_config.TextColumn("Password", help="Reviewer login password")
                 }
 
                 edited_reviewer_df = st.data_editor(
@@ -511,35 +825,35 @@ def run():
                     if st.button("💾 Save Reviewer Data Changes", type="primary"):
                         try:
                             # 🔧 FIX: Normalize ID columns
-                            original_ids = set(reviewer_df['ID'].tolist())
+                            original_ids = set(reviewer_df['id'].tolist())
                             edited_ids = {
-                                int(x) for x in edited_reviewer_df['ID'].tolist()
+                                int(x) for x in edited_reviewer_df['id'].tolist()
                                 if not pd.isna(x)
                             }
                             deleted_ids = original_ids - edited_ids
                             
                             # Delete removed rows
                             for deleted_id in deleted_ids:
-                                cursor.execute("DELETE FROM reviewer_data WHERE ID = %s", (deleted_id,))
+                                cursor.execute("DELETE FROM reviewer_data WHERE id = %s", (deleted_id,))
                             
                             # Update/Insert rows - Note: Cvsreviewed is now derived, not stored
                             for _, row in edited_reviewer_df.iterrows():
-                                if pd.isna(row['ID']):
+                                if pd.isna(row['id']):
                                     # New row - INSERT
                                     cursor.execute("""
-                                        INSERT INTO reviewer_data (Name, Password, ReviewsNumber, LinkedIn, Email, Rprofilez)
+                                        INSERT INTO reviewer_data (name, password, reviewsnumber, linkedin, email, rprofilez)
                                         VALUES (%s, %s, %s, %s, %s, %s)
-                                    """, (row['Name'], row['Password'], row['ReviewsNumber'], 
-                                          row['LinkedIn'], row['Email'], row['Rprofilez']))
+                                    """, (row['name'], row['password'], row['reviewsnumber'], 
+                                          row['linkedin'], row['email'], row['rprofilez']))
                                 else:
                                     # Existing row - UPDATE
                                     cursor.execute("""
                                         UPDATE reviewer_data 
-                                        SET Name=%s, Password=%s, ReviewsNumber=%s, 
-                                            LinkedIn=%s, Email=%s, Rprofilez=%s
-                                        WHERE ID=%s
-                                    """, (row['Name'], row['Password'], row['ReviewsNumber'],
-                                          row['LinkedIn'], row['Email'], row['Rprofilez'], int(row['ID'])))
+                                        SET name=%s, password=%s, reviewsnumber=%s, 
+                                            linkedin=%s, email=%s, rprofilez=%s
+                                        WHERE id=%s
+                                    """, (row['name'], row['password'], row['reviewsnumber'],
+                                          row['linkedin'], row['email'], row['rprofilez'], int(row['id'])))
                             
                             st.success("✅ Reviewer data saved successfully!")
                             st.rerun()
@@ -553,27 +867,34 @@ def run():
 
                 # 📝 EDITABLE REVIEWS DATA
                 st.header("**Reviews Data (Editable)**")
-                # 1) Fetch only the columns you want, renaming Email_ID → User_Email
+                # 1) Fetch all columns from reviews table
                 cursor.execute("""
                   SELECT
                     id,
-                    Name,
-                    Roll_No,
-                    Email_ID AS User_Email,
-                    Reviewer_Name,
-                    Reviewer_LinkedIn,
-                    Review
+                    name,
+                    roll_no,
+                    email_id,
+                    reviewer_name,
+                    reviewer_linkedin,
+                    reviewer_email,
+                    drive_link,
+                    review,
+                    submission_time
                   FROM reviews_data
+                  ORDER BY submission_time DESC
                 """)
-                cols = ["id","Name","Roll_No","User_Email","Reviewer_Name","Reviewer_LinkedIn","Review"]
+                cols = ["id","name","roll_no","email_id","reviewer_name","reviewer_linkedin","reviewer_email","drive_link","review","submission_time"]
                 reviews_df = pd.DataFrame(cursor.fetchall(), columns=cols)
 
                 reviews_column_config = {
                     "id": st.column_config.NumberColumn("ID", disabled=True),
-                    "Roll_No": st.column_config.TextColumn("Roll Number"),
-                    "User_Email": st.column_config.TextColumn("Candidate Email"),
-                    "Reviewer_LinkedIn": st.column_config.LinkColumn("Reviewer LinkedIn"),
-                    "Review": st.column_config.TextColumn("Feedback", width="large"),
+                    "roll_no": st.column_config.TextColumn("Roll Number"),
+                    "email_id": st.column_config.TextColumn("Candidate Email"),
+                    "reviewer_linkedin": st.column_config.LinkColumn("Reviewer LinkedIn"),
+                    "reviewer_email": st.column_config.TextColumn("Reviewer Email"),
+                    "drive_link": st.column_config.LinkColumn("Drive Link"),
+                    "review": st.column_config.TextColumn("Feedback", width="large"),
+                    "submission_time": st.column_config.DatetimeColumn("Submission Time", disabled=True),
                 }
 
                 edited_reviews_df = st.data_editor(
@@ -606,27 +927,31 @@ def run():
                                 def norm(v):
                                     return None if (pd.isna(v) or str(v).strip()=="") else v
 
-                                user_email = norm(row["User_Email"])
-                                linkedin   = norm(row["Reviewer_LinkedIn"])
-                                feedback   = norm(row["Review"])
+                                email_id = norm(row["email_id"])
+                                reviewer_linkedin = norm(row["reviewer_linkedin"])
+                                reviewer_email = norm(row["reviewer_email"])
+                                drive_link = norm(row["drive_link"])
+                                review_text = norm(row["review"])
 
                                 if pd.isna(row["id"]):
-                                    cursor.execute(
-                                      "INSERT INTO reviews_data "
-                                      "(Name,Roll_No,Email_ID,Reviewer_Name,Reviewer_LinkedIn,Reviewer_Email,Drive_Link,Review) "
-                                      "VALUES (%s,%s,%s,%s,%s,NULL,NULL,%s)",
-                                      (row["Name"], row["Roll_No"], user_email, row["Reviewer_Name"],
-                                       linkedin, feedback)
-                                    )
+                                    # New row - INSERT (submission_time will be auto-set by database)
+                                    cursor.execute("""
+                                      INSERT INTO reviews_data 
+                                      (name, roll_no, email_id, reviewer_name, reviewer_linkedin, reviewer_email, drive_link, review)
+                                      VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                                    """, (row["name"], row["roll_no"], email_id, row["reviewer_name"],
+                                          reviewer_linkedin, reviewer_email, drive_link, review_text))
                                 else:
-                                    cursor.execute(
-                                      "UPDATE reviews_data SET "
-                                      "Roll_No=%s,Email_ID=%s,Reviewer_LinkedIn=%s,Reviewer_Email=NULL,Drive_Link=NULL,Review=%s "
-                                      "WHERE id=%s",
-                                      (row["Roll_No"], user_email, linkedin, feedback, int(row["id"]))
-                                    )
+                                    # Existing row - UPDATE (don't update submission_time)
+                                    cursor.execute("""
+                                      UPDATE reviews_data SET 
+                                      name=%s, roll_no=%s, email_id=%s, reviewer_name=%s, 
+                                      reviewer_linkedin=%s, reviewer_email=%s, drive_link=%s, review=%s
+                                      WHERE id=%s
+                                    """, (row["name"], row["roll_no"], email_id, row["reviewer_name"],
+                                          reviewer_linkedin, reviewer_email, drive_link, review_text, int(row["id"])))
                             
-                            st.success("✅ Reviews data saved (with NULLs where you cleared cells)!")
+                            st.success("✅ Reviews data saved successfully!")
                             st.rerun()
                         except Exception as e:
                             st.error(f"❌ Error saving reviews data: {e}")
@@ -638,6 +963,21 @@ def run():
 
                 # 🚀 NEW: CV ALLOCATION MANAGEMENT
                 st.header("**CV Allocation Management 🎯**")
+                
+                # Debug section to show domain matching
+                st.subheader("🔍 Domain Debug Information")
+                allocation_stats = get_allocation_stats()
+                if allocation_stats:
+                    debug_df = pd.DataFrame([
+                        {
+                            "Reviewer": stat["name"], 
+                            "Domains": stat["rprofilez"],
+                            "Capacity": stat["remaining_capacity"],
+                            "Total Assigned": stat["total_assigned"]
+                        }
+                        for stat in allocation_stats
+                    ])
+                    st.dataframe(debug_df, use_container_width=True)
                 
                 # Get allocation statistics for the download functionality
                 allocation_stats = get_allocation_stats()
@@ -706,14 +1046,14 @@ def run():
                         try:
                             # Case-insensitive name lookup
                             cursor.execute(
-                                "SELECT Name, Password FROM reviewer_data WHERE UPPER(Name) = UPPER(%s)",
+                                "SELECT name, password FROM reviewer_data WHERE UPPER(name) = UPPER(%s)",
                                 (reviewer_name,)
                             )
                             row = cursor.fetchone()
-                            if row and ad_password == row['Password']:
+                            if row and ad_password == row['password']:
                                 st.session_state['logged_in'] = True
-                                st.session_state['ad_user'] = row['Name']  # Use the exact name from DB
-                                st.success(f"Welcome {row['Name']}!")
+                                st.session_state['ad_user'] = row['name']  # Use the exact name from DB
+                                st.success(f"Welcome {row['name']}!")
                                 st.rerun()
                             else:
                                 st.error("Invalid name or password")
@@ -742,10 +1082,10 @@ def run():
                 st.error("Reviewer not found!")
                 return
 
-            ReviewsNumber = info["ReviewsNumber"]
-            domain = info["Rprofilez"]
-            linkedin = info["LinkedIn"]
-            reviewer_email = info["Email"]
+            ReviewsNumber = info["reviewsnumber"]
+            domain = info["rprofilez"]
+            linkedin = info["linkedin"]
+            reviewer_email = info["email"]
 
             # ✅ Compute the actual number of reviews this reviewer has already submitted
             reviewed_count = get_reviewer_count(ad_user)
@@ -797,7 +1137,7 @@ def run():
                     # Update reviewer's LinkedIn profile
                     with get_db_cursor() as (_, cur):
                         cur.execute(
-                            "UPDATE reviewer_data SET LinkedIn = %s WHERE Name = %s",
+                            "UPDATE reviewer_data SET linkedin = %s WHERE name = %s",
                             (final_linkedin, ad_user)
                         )
                         # Clear cache to get updated LinkedIn info
@@ -824,7 +1164,7 @@ def run():
             # 4️⃣ Loop & render one form per CV
             for cv in cvs:
                 roll, student, link, email_id, status, existing_review = (
-                    cv["Roll_No"], cv["Name"], cv["drive_link"], cv["Email_ID"], 
+                    cv["roll_no"], cv["name"], cv["drive_link"], cv["email_id"], 
                     cv["status_num"], cv["existing_review"]
                 )
 
@@ -868,12 +1208,12 @@ def run():
                         with get_db_cursor() as (_, cur2):
                             # Get current LinkedIn from reviewer profile (updated at the top)
                             current_info = get_reviewer_info(ad_user)
-                            current_linkedin = current_info["LinkedIn"] if current_info else linkedin
+                            current_linkedin = current_info["linkedin"] if current_info else linkedin
                             
                             if existing_review:
                                 # They're editing an old review: update the review and LinkedIn
                                 cur2.execute(
-                                    "UPDATE reviews_data SET Review=%s, Reviewer_LinkedIn=%s WHERE Roll_No=%s AND Reviewer_Name=%s",
+                                    "UPDATE reviews_data SET review=%s, reviewer_linkedin=%s WHERE roll_no=%s AND reviewer_name=%s",
                                     (review_text, current_linkedin, roll, ad_user)
                                 )
                                 # Store success message in session state for persistence
@@ -883,8 +1223,8 @@ def run():
                                 # First-time review: insert + mark the CV reviewed
                                 cur2.execute("""
                                     INSERT INTO reviews_data
-                                      (Name, Roll_No, Email_ID, Reviewer_Name, Reviewer_LinkedIn,
-                                       Reviewer_Email, Drive_Link, Review)
+                                      (name, roll_no, email_id, reviewer_name, reviewer_linkedin,
+                                       reviewer_email, drive_link, review)
                                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                                 """, (
                                     student,
@@ -897,7 +1237,7 @@ def run():
                                     review_text
                                 ))
                                 cur2.execute(
-                                    "UPDATE user_data SET status_num = 2 WHERE Roll_No = %s",
+                                    "UPDATE user_data SET status_num = 2 WHERE roll_no = %s",
                                     (roll,)
                                 )
                                 # Store success message in session state for persistence
@@ -905,7 +1245,8 @@ def run():
                                 st.success(f"✅ Submitted review for {student}!")
                         
                         # Add a small delay to let user see the message before rerun
-                        import time
+                        send_review_email(email_id, student, review_text)
+                        
                         time.sleep(1.5)
                         st.rerun()
 
@@ -934,26 +1275,26 @@ def get_allocation_stats():
     with get_db_cursor() as (_, cur):
         cur.execute("""
             SELECT 
-                r.Name,
-                r.Rprofilez,
-                r.ReviewsNumber,
+                r.name,
+                r.rprofilez,
+                r.reviewsnumber,
                 COALESCE(rv.completed, 0) as completed_reviews,
                 COALESCE(rv.completed, 0) + COALESCE(pending.pending_count, 0) as total_assigned,
-                r.ReviewsNumber - COALESCE(rv.completed, 0) as remaining_capacity
+                r.reviewsnumber - COALESCE(rv.completed, 0) as remaining_capacity
             FROM reviewer_data r
             LEFT JOIN (
-                SELECT Reviewer_Name, COUNT(*) as completed
+                SELECT reviewer_name, COUNT(*) as completed
                 FROM reviews_data
-                GROUP BY Reviewer_Name
-            ) rv ON rv.Reviewer_Name = r.Name
+                GROUP BY reviewer_name
+            ) rv ON rv.reviewer_name = r.name
             LEFT JOIN (
                 SELECT assigned_to, COUNT(*) as pending_count
                 FROM user_data 
                 WHERE status_num = 1 AND assigned_to IS NOT NULL
                 GROUP BY assigned_to
-            ) pending ON pending.assigned_to = r.Name
-            WHERE r.ReviewsNumber > COALESCE(rv.completed, 0)
-            ORDER BY r.Rprofilez, total_assigned ASC
+            ) pending ON pending.assigned_to = r.name
+            WHERE r.reviewsnumber > COALESCE(rv.completed, 0)
+            ORDER BY r.rprofilez, total_assigned ASC
         """)
         return cur.fetchall()
 
@@ -962,10 +1303,10 @@ def smart_cv_allocation():
     with get_db_cursor() as (_, cur):
         # Get unassigned CVs by profile
         cur.execute("""
-            SELECT Roll_No, profiles
+            SELECT roll_no, profiles
             FROM user_data 
             WHERE status_num = 1 AND assigned_to IS NULL
-            ORDER BY profiles, ID ASC
+            ORDER BY profiles, id ASC
         """)
         unassigned_cvs = cur.fetchall()
         
@@ -979,7 +1320,7 @@ def smart_cv_allocation():
         allocations_made = []
         
         for cv in unassigned_cvs:
-            roll_no = cv["Roll_No"]
+            roll_no = cv["roll_no"]
             profile = cv["profiles"]
             
             # Find best reviewer for this profile
@@ -987,16 +1328,33 @@ def smart_cv_allocation():
             min_workload = float('inf')
             
             for reviewer in allocation_stats:
-                if (reviewer["Rprofilez"] == profile and 
+                # Handle comma-separated domains in reviewer profiles
+                reviewer_domains = [domain.strip() for domain in (reviewer["rprofilez"] or "").split(",")]
+                
+                # Check if the user's profile matches any of the reviewer's domains
+                profile_match = False
+                for domain in reviewer_domains:
+                    # Normalize both strings for comparison (handle Finance-Quant vs Finance/Quant)
+                    normalized_domain = domain.replace("/", "-").replace("-", "/").lower()
+                    normalized_profile = profile.replace("/", "-").replace("-", "/").lower()
+                    
+                    if (domain.lower() == profile.lower() or 
+                        normalized_domain == normalized_profile.lower() or
+                        profile.lower() in domain.lower() or 
+                        domain.lower() in profile.lower()):
+                        profile_match = True
+                        break
+                
+                if (profile_match and 
                     reviewer["remaining_capacity"] > 0 and
                     reviewer["total_assigned"] < min_workload):
-                    best_reviewer = reviewer["Name"]
+                    best_reviewer = reviewer["name"]
                     min_workload = reviewer["total_assigned"]
             
             if best_reviewer:
                 # Assign CV to best reviewer
                 cur.execute(
-                    "UPDATE user_data SET assigned_to = %s WHERE Roll_No = %s",
+                    "UPDATE user_data SET assigned_to = %s WHERE roll_no = %s",
                     (best_reviewer, roll_no)
                 )
                 allocated_count += 1
@@ -1004,7 +1362,7 @@ def smart_cv_allocation():
                 
                 # Update local stats to prevent double-assignment in this batch
                 for reviewer in allocation_stats:
-                    if reviewer["Name"] == best_reviewer:
+                    if reviewer["name"] == best_reviewer:
                         reviewer["total_assigned"] += 1
                         reviewer["remaining_capacity"] -= 1
                         break
@@ -1020,14 +1378,14 @@ def get_reviewer_assigned_cvs(reviewer_name: str, max_capacity: int):
     """Get CVs assigned to a specific reviewer"""
     with get_db_cursor() as (_, cur):
         cur.execute("""
-            SELECT u.Roll_No, u.Name, u.drive_link, u.Email_ID, u.status_num,
-                   r.Review AS existing_review
+            SELECT u.roll_no, u.name, u.drive_link, u.email_id, u.status_num,
+                   r.review AS existing_review
               FROM user_data u
               LEFT JOIN reviews_data r 
-                ON u.Roll_No = r.Roll_No 
-               AND r.Reviewer_Name = %s
+                ON u.roll_no = r.roll_no 
+               AND r.reviewer_name = %s
              WHERE u.assigned_to = %s
-             ORDER BY u.status_num ASC, u.ID ASC
+             ORDER BY u.status_num ASC, u.id ASC
              LIMIT %s
         """, (reviewer_name, reviewer_name, max_capacity))
         return cur.fetchall()
