@@ -1544,8 +1544,7 @@ def run():
                         # Send structured email
                         send_review_email(email_id, student, review_sections, ad_user)
                         
-                        time.sleep(1.5)
-                        st.rerun()
+                        # Success message will be shown at the top due to session state
 
         reviewer_login()
 
